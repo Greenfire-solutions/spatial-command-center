@@ -1,0 +1,12 @@
+<!doctype html>
+<html>
+  <head><meta charset="utf-8" /><title>Spatial Command Center capture</title></head>
+  <body>
+    <!--
+      An offscreen document, because a Manifest V3 service worker cannot hold a
+      MediaStream and is evicted when idle. This page owns both the capture and
+      the socket, so a paused worker never drops a live screen.
+    -->
+    <script type="module" src="capture.js"></script>
+  </body>
+</html>

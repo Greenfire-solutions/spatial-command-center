@@ -1,0 +1,76 @@
+SPATIAL COMMAND CENTER: READ ME FIRST
+=====================================
+
+WHAT IT IS
+A free Mac app that puts real web pages on big screens floating in 3D around you.
+You can click, type and scroll in every screen, move and turn the screens, and it
+remembers your layout. Free and open source (MIT license, see LICENSE).
+
+WHAT YOU NEED
+- A Mac with macOS 12 (Monterey) or newer. Use the zip made for your Mac:
+  "Intel Mac" or "Apple Silicon" (Apple menu > About This Mac tells you which).
+- An internet connection, because the screens show live web pages.
+- About 300 MB of free disk space.
+Nothing else. No Node, no developer tools, no account, no API key.
+
+START IT
+1. Double-click the zip to unzip it. Move the "Spatial Command Center" folder somewhere
+   you keep things, for example Documents or Applications.
+2. Open the folder and double-click the app "Spatial Command Center".
+   The first time, your Mac checks who made it:
+   - macOS 12 to 14: right-click it (or Control-click), choose Open, then press Open again.
+   - macOS 15 or newer: it says it cannot be opened. Press Done, open
+     System Settings > Privacy & Security, scroll down to the message about
+     "Spatial Command Center", press Open Anyway and type your Mac password.
+     Then double-click it again.
+   After that it opens in a few seconds, every time.
+3. Quit with Cmd+Q, like any app.
+
+If the app will not open by double-clicking, use the backup: right-click
+"Start Spatial Command Center.command", choose Open, and press Open again. A Terminal
+window opens, starts the app, and shows any messages if something goes wrong.
+
+YOUR FIRST TEN MINUTES
+- A welcome card explains the basics. Two example screens are ready: Wikipedia and a
+  world map. Click into them, scroll, search, zoom the map.
+- Look around: drag on the empty background.
+- Add a screen: press "+ SCREEN" at the bottom, type a website address in the bar above
+  the new screen (try youtube.com or your favourite news site) and press Return.
+- Move screens: press ARRANGE at the top (or the A key), then drag a screen.
+  Hold Shift while dragging to push it nearer or farther. Press BROWSE to use the pages again.
+- Try the ready-made layouts at the bottom (Focus, Stack, Surround...). Some open sites
+  like GitHub or Claude, which ask you to sign in inside the screen if you want to use them.
+- Your layout saves by itself. The disk button at the bottom saves right now.
+Sign-ins and your layout are kept in your Mac's settings folder for the app, not in this
+folder, so you can replace the app with a newer download and keep everything.
+
+EXTRAS (all optional; everything above works without them)
+- AI agent you can connect to a screen: needs your own Anthropic API key. Make a folder
+  called "Spatial Command Center Data" in your home folder, put a text file in it named
+  "anthropic-api-key.txt" containing just the key, and restart the app.
+- Your own Mac desktop on a screen (the "Desktop" layout): an advanced extra. It needs
+  Apple's Command Line Tools, the free tool ffmpeg, and the Screen Recording permission.
+  Start its helper in Terminal from this folder with:
+      scripts/node.sh macos-bridge/desktop-host.mjs
+  Without it the Desktop layouts show empty screens.
+- A VR headset: a developer extra that runs from the source (Node.js and npm install).
+  See README.md, "On a headset".
+
+MAKE IT YOUR OWN
+The full source code is in this folder. Open the folder in Claude Code and read CLAUDE.md:
+how it is laid out, how to run the tests (scripts/test.sh, nothing to install) and ideas
+for your first changes.
+
+IF SOMETHING GOES WRONG
+- Screens stay blank or say they could not load: check the internet connection.
+- "Spatial Command Center is damaged and cannot be opened": the zip did not finish
+  downloading. Download it again and unzip the new copy.
+- The app does not appear: use the backup "Start Spatial Command Center.command" (above)
+  and read the last lines in its Terminal window.
+- To start completely fresh: quit the app and delete the folder
+  ~/Library/Application Support/Spatial Command Center (your layout and sign-ins).
+
+This app is not signed with a paid Apple developer certificate, which is why your Mac asks
+the first time. That is normal for free apps from small studios.
+
+Made by Greenfire Research and Innovation Center. Help: https://greenfire.earth

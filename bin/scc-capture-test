@@ -1,0 +1,92 @@
+#!/usr/bin/env node
+/*
+ * scc-capture-test — verify the capture layer alone, with no headset involved.
+ *
+ * This exists because it was skipped. Five captures were wired into the
+ * workspace before anything established that the machine could run five, and
+ * the resulting failure arrived as "the desktops are blank in the headset" —
+ * a symptom three layers above the cause, indistinguishable from the URL and
+ * protocol bugs that produced exactly the same picture earlier.
+ *
+ * Each display is captured on its own, in sequence, with a hard timeout. Then
+ * they are captured together. The difference between those two results is the
+ * concurrency limit, stated as a number rather than guessed at.
+ *
+ *   bin/scc-capture-test           one at a time, then all at once
+ *   bin/scc-capture-test 3         one at a time, then 3 at once
+ */
+import { spawn } from 'node:child_process';
+import { statSync, existsSync, unlinkSync } from 'node:fs';
+import { captureDeviceMap, describeDisplays } from '../macos-bridge/displays.mjs';
+
+const TIMEOUT_MS = 12_000;
+const OUT = (n) => `/tmp/scc-captest-${n}.jpg`;
+
+/*
+ * A capture that hangs is the interesting case, so the timeout is enforced here
+ * rather than delegated to `timeout(1)`, which is GNU coreutils and not present
+ * on a stock macOS. SIGKILL rather than SIGTERM: a wedged avfoundation input
+ * does not always honour a polite signal, which is how a probe meant to last
+ * fourteen seconds ran for three minutes.
+ */
+const captureOne = (ordinal, deviceIndex) => new Promise((resolve) => {
+  if (existsSync(OUT(ordinal))) unlinkSync(OUT(ordinal));
+  const started = Date.now();
+  const child = spawn('ffmpeg', [
+    '-hide_banner', '-loglevel', 'error',
+    '-f', 'avfoundation', '-pixel_format', 'uyvy422',
+    '-i', `${deviceIndex}:none`,
+    '-vf', 'scale=640:-2', '-frames:v', '1', '-q:v', '6',
+    '-f', 'mjpeg', '-y', OUT(ordinal)
+  ], { stdio: ['ignore', 'ignore', 'pipe'] });
+
+  let stderr = '';
+  child.stderr.on('data', (d) => { stderr += d; });
+
+  const timer = setTimeout(() => {
+    child.kill('SIGKILL');
+    resolve({ ordinal, ok: false, ms: Date.now() - started, reason: 'timed out (wedged)' });
+  }, TIMEOUT_MS);
+
+  child.on('exit', () => {
+    clearTimeout(timer);
+    const ms = Date.now() - started;
+    let size = 0;
+    try { size = statSync(OUT(ordinal)).size; } catch { /* no file means no frame */ }
+    resolve(size > 0
+      ? { ordinal, ok: true, ms, size }
+      : { ordinal, ok: false, ms, reason: stderr.trim().split('\n')[0] || 'produced no frame' });
+  });
+});
+
+const report = (results) => {
+  for (const r of results.sort((a, b) => a.ordinal - b.ordinal)) {
+    const detail = r.ok ? `${String(r.size).padStart(7)} bytes` : r.reason;
+    console.log(`    display ${r.ordinal}  ${r.ok ? 'OK  ' : 'FAIL'}  ${String(r.ms).padStart(6)}ms  ${detail}`);
+  }
+  return results.filter((r) => r.ok).length;
+};
+
+const map = await captureDeviceMap();
+const displays = await describeDisplays();
+const ordinals = displays.map((d) => d.ordinal).filter((o) => map.has(o));
+const concurrency = Number(process.argv[2]) || ordinals.length;
+
+console.log(`\n  ${ordinals.length} display(s) addressable\n`);
+
+console.log('  SEQUENTIAL — one capture at a time');
+const sequential = [];
+for (const ordinal of ordinals) sequential.push(await captureOne(ordinal, map.get(ordinal)));
+const seqOk = report(sequential);
+
+console.log(`\n  CONCURRENT — ${concurrency} captures at once`);
+const concurrent = await Promise.all(
+  ordinals.slice(0, concurrency).map((o) => captureOne(o, map.get(o)))
+);
+const conOk = report(concurrent);
+
+console.log(`\n  sequential ${seqOk}/${ordinals.length}   concurrent ${conOk}/${concurrency}`);
+if (seqOk === ordinals.length && conOk < concurrency) {
+  console.log('  -> every display captures alone; the limit is concurrency, not the displays.');
+}
+console.log('');

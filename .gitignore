@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-electron/
+out/
+release/
+*.tsbuildinfo
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Logs and diagnostics
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+*.heapsnapshot
+*.cpuprofile
+
+# Test and runtime artifacts
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+scc-electron-poc-*/
+
+# Local browser profiles and caches
+.cache/
+.vite/
+steel-profile/
+chrome-profile/
+electron-profile/
+
+# Editor and OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*~
+
+# Compiled macOS bridge helpers — built locally by swiftc, never checked in.
+macos-bridge/.bin/
+
+# Scene captures posted by the headset diagnostics sink.
+.xr-views/
+runtime/
+.scc-installed

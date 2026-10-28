@@ -1,0 +1,55 @@
+#!/usr/bin/env node
+/*
+ * scc-displays — stand the virtual desktops up, tear them down, or show what
+ * the capture layer can address.
+ *
+ *   bin/scc-displays up [count]   default 4 virtual, so 5 desktops with built-in
+ *   bin/scc-displays down
+ *   bin/scc-displays list
+ */
+import {
+  ensureVirtualDisplays, disconnectVirtualDisplays,
+  describeDisplays, LOGICAL_WIDTH, LOGICAL_HEIGHT
+} from '../macos-bridge/displays.mjs';
+
+const [command = 'list', countArg] = process.argv.slice(2);
+const log = (line) => console.log(`  ${line}`);
+
+const show = async () => {
+  const displays = await describeDisplays();
+  console.log('');
+  console.log('  ADDRESS                DISPLAY            TYPE       LOGICAL      ffmpeg');
+  for (const display of displays) {
+    const size = `${display.pointWidth}x${display.pointHeight}`;
+    /* Flag anything not at the sizing the headset arithmetic settled on, since
+     * a desktop at the wrong resolution still paints and just reads badly —
+     * the failure is silent unless it is named here. */
+    const off = display.virtual && size !== `${LOGICAL_WIDTH}x${LOGICAL_HEIGHT}` ? '  <- not standard' : '';
+    console.log(
+      `  ${display.address.padEnd(22)} ${String(display.name).padEnd(18)} ` +
+      `${(display.virtual ? 'virtual' : 'built-in').padEnd(10)} ${size.padEnd(12)} ` +
+      `${display.ffmpegIndex ?? '-'}${off}`
+    );
+  }
+  console.log('');
+  console.log(`  ${displays.length} capturable display(s). Virtual screens should run ${LOGICAL_WIDTH}x${LOGICAL_HEIGHT} HiDPI.`);
+  console.log('');
+};
+
+try {
+  if (command === 'up') {
+    await ensureVirtualDisplays(Number(countArg) || 4, log);
+    await show();
+  } else if (command === 'down') {
+    await disconnectVirtualDisplays(log);
+  } else if (command === 'list') {
+    await show();
+  } else {
+    console.error(`unknown command: ${command}`);
+    process.exit(1);
+  }
+} catch (error) {
+  console.error(`\n  ${error.message}\n`);
+  console.error('  Is BetterDisplay running? Launch it with: open -a BetterDisplay\n');
+  process.exit(1);
+}

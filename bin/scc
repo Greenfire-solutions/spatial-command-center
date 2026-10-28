@@ -1,0 +1,111 @@
+#!/usr/bin/env node
+/*
+ * scc — see what the headset sees, from the terminal.
+ *
+ * The other half of the loop. The workspace already posts telemetry to the dev
+ * server's /__diag sink; this reads that log and renders it as live state
+ * rather than as a stream of lines nobody scrolls back through.
+ *
+ *   scc watch     live source inventory, refreshed as frames arrive
+ *   scc state     one snapshot and exit
+ *   scc errors    just the errors, newest first
+ *
+ * Written because an hour was lost to a capture host that reported healthy and
+ * produced nothing while a different application supplied the picture. Every
+ * fact needed to catch that in seconds was already being recorded.
+ */
+
+import { readFileSync, existsSync, statSync } from 'node:fs';
+import path from 'node:path';
+
+const LOG = process.env.SCC_DIAG_LOG
+  || path.join(process.cwd(), '.xr-diagnostics.log');
+
+const read = () => {
+  if (!existsSync(LOG)) return [];
+  /* Only the tail matters: this file grows to megabytes in a long session. */
+  const size = statSync(LOG).size;
+  const raw = readFileSync(LOG, 'utf8').slice(Math.max(0, size - 400_000));
+  return raw.split('\n').slice(1).map((line) => {
+    try { return JSON.parse(line); } catch { return null; }
+  }).filter(Boolean);
+};
+
+const latestSession = (rows) => {
+  const order = [];
+  for (const row of rows) if (row.session && !order.includes(row.session)) order.push(row.session);
+  return order[order.length - 1];
+};
+
+const snapshot = () => {
+  const rows = read();
+  const session = latestSession(rows);
+  const mine = rows.filter((row) => row.session === session);
+  const facts = {};
+  const errors = [];
+  for (const row of mine) {
+    if (row.kind === 'fact') facts[row.key] = { value: row.value, at: row.at };
+    if (row.kind === 'error' || row.kind === 'console.error') {
+      errors.push({ at: row.at, message: row.message || row.text });
+    }
+  }
+  const ua = mine.find((row) => row.ua)?.ua || '';
+  return { session, facts, errors, device: /Quest/.test(ua) ? 'Quest' : 'desktop' };
+};
+
+const paint = () => {
+  const { session, facts, errors, device } = snapshot();
+  const get = (key) => facts[key]?.value;
+  const lines = [];
+
+  lines.push(`\x1b[1mspatial command center\x1b[0m   ${device}   session ${session || '—'}`);
+  lines.push('');
+  lines.push(`  presenting   ${get('presenting') ?? '—'}      frames ${get('frames') ?? '—'}`);
+  lines.push(`  provider     ${get('sources.provider') ?? '—'}`);
+
+  const live = String(get('sources.live') ?? '');
+  const [liveCount] = live.split('/');
+  const colour = Number(liveCount) > 0 ? '\x1b[32m' : '\x1b[31m';
+  lines.push(`  live         ${colour}${live || '—'}\x1b[0m`);
+  if (get('sources.error')) lines.push(`  \x1b[33merror        ${get('sources.error')}\x1b[0m`);
+
+  lines.push('');
+  lines.push('  \x1b[2mSOURCE              TYPE      FRAMES   LAST  TEXTURE\x1b[0m');
+  const sources = Object.entries(facts).filter(([key]) => key.startsWith('source.'));
+  if (!sources.length) lines.push('  \x1b[2m(no sources reported)\x1b[0m');
+  for (const [key, entry] of sources) {
+    const name = key.slice(7).padEnd(18).slice(0, 18);
+    const [type, , frames, last, texture] = String(entry.value).split(' ');
+    /* A source that has not painted in three seconds is not live, whatever the
+     * connection says. That distinction is the whole point of this view. */
+    const stale = last === 'never' || parseFloat(last) > 3;
+    lines.push(`  ${name} ${String(type).padEnd(9)} ${String(frames).padStart(6)} ${stale ? '\x1b[31m' : '\x1b[32m'}${String(last).padStart(6)}\x1b[0m  ${texture || '-'}`);
+  }
+
+  if (errors.length) {
+    lines.push('');
+    lines.push('  \x1b[31mERRORS\x1b[0m');
+    for (const error of errors.slice(-3)) {
+      lines.push(`  ${String(error.message).slice(0, 76)}`);
+    }
+  }
+  return lines.join('\n');
+};
+
+const command = process.argv[2] || 'watch';
+
+if (command === 'state') {
+  console.log(paint());
+} else if (command === 'errors') {
+  const { errors } = snapshot();
+  if (!errors.length) console.log('  no errors recorded');
+  for (const error of errors.slice(-20)) console.log(`  ${error.at?.slice(11, 19)}  ${error.message}`);
+} else {
+  const render = () => {
+    process.stdout.write('\x1b[2J\x1b[H');
+    process.stdout.write(paint());
+    process.stdout.write('\n\n  \x1b[2mctrl-c to stop\x1b[0m\n');
+  };
+  render();
+  setInterval(render, 1000);
+}

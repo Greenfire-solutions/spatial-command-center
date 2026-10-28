@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+#
+# scc-see — capture what the headset is actually showing.
+#
+# `adb exec-out screencap` returns a correctly-sized, entirely black PNG on
+# Horizon OS: raw framebuffer reads of composited VR output are blocked. The
+# system's own screenshot is not, so this presses the shortcut Horizon OS binds
+# to it (keyevent 120), waits for the file to land, and pulls the newest one.
+#
+# That route is the only one that sees compositor quad layers, so it is the only
+# check that can confirm what the wearer actually reads. scene-capture.js draws
+# the WebGL scene alone and is structurally blind to them.
+#
+# Usage: bin/scc-see [output-path]
+set -euo pipefail
+
+ADB=${ADB:-$HOME/Library/Android/sdk/platform-tools/adb}
+OUT=${1:-/tmp/headset-$(date +%H%M%S).png}
+REMOTE=/sdcard/Oculus/Screenshots
+
+state=$("$ADB" get-state 2>/dev/null || echo none)
+if [ "$state" != device ]; then
+  echo "headset not reachable (adb state: $state)" >&2
+  echo "  check the cable, then accept the USB-debugging prompt inside the headset." >&2
+  exit 1
+fi
+
+# The newest file before the shot, so a slow write is waited out rather than
+# silently returning whatever happened to be last.
+before=$("$ADB" shell ls -t "$REMOTE" 2>/dev/null | head -1 | tr -d '\r' || true)
+"$ADB" shell input keyevent 120 >/dev/null 2>&1
+
+latest=$before
+for _ in $(seq 1 20); do
+  sleep 0.5
+  latest=$("$ADB" shell ls -t "$REMOTE" 2>/dev/null | head -1 | tr -d '\r' || true)
+  [ -n "$latest" ] && [ "$latest" != "$before" ] && break
+done
+
+if [ -z "$latest" ] || [ "$latest" = "$before" ]; then
+  echo "no new screenshot appeared. Is the headset awake and being worn?" >&2
+  exit 1
+fi
+
+tmp=$(mktemp -t scc-see).jpg
+"$ADB" pull "$REMOTE/$latest" "$tmp" >/dev/null 2>&1
+sips -s format png "$tmp" --out "$OUT" >/dev/null 2>&1
+rm -f "$tmp"
+echo "$OUT"

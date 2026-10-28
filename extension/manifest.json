@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Spatial Command Center Tab Bridge",
+  "version": "0.2.0",
+  "description": "Presents real Chrome tabs, with your profile and extensions, as spatial screens.",
+  "permissions": [
+    "tabs",
+    "tabCapture",
+    "offscreen",
+    "debugger",
+    "storage"
+  ],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background/service-worker.js",
+    "type": "module"
+  },
+  "action": { "default_title": "Spatial Command Center bridge" }
+}
